@@ -17,6 +17,13 @@ int currentTime; // 4-digit 24-hour format, 0000 = 12:00AM, 1400 = 2:00PM
 const char* currentDate; // const string, e.g. "date/date/date"
 int runCount;
 
+// Timing Stuff
+unsigned long int initialMillis;
+unsigned int currentMillis;
+unsigned int currentCount;
+
+RTC_DS1307 rtc;
+
 // Water Sensor
 #define RDA 0x80
 #define TBE 0x20
@@ -123,8 +130,10 @@ void setup() {
   humid = 25.8744;
 
   // Misc
-  currentTime = 2401;
-  currentDate = "13/31/2022";
+  rtc.begin();
+  rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+  //currentTime = 2401;
+  //currentDate = "13/31/2022";
   state = IDLING; // Set initial state for test purpose
 
   printString("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\nMain Loop\n");
@@ -166,7 +175,11 @@ void loop() {
     }
     humid = getHumid(); // MONITOR temp and humidity, turn fan on if temp above threshold
     temp = getTemp();
-    lcdDisplayTempHumid(temp, humid); // once per minute
+    currentCount = checkCount(); // check count
+    if(currentCount >= 60000){
+      lcdDisplayTempHumid(temp, humid); // once per minute
+      startCount(); // restart count
+    }
     if(fanTemp(temp)){
       state = RUNNING;
       allLEDoff();
@@ -196,7 +209,11 @@ void loop() {
     }
     humid = getHumid(); // MONITOR temp and humidity
     temp = getTemp();
-    lcdDisplayTempHumid(temp, humid); // once per minute
+    currentCount = checkCount(); // check count
+    if(currentCount >= 60000){
+      lcdDisplayTempHumid(temp, humid); // once per minute
+      startCount(); // restart count
+    }
     reportVentChange(updateVentPosition());
     if(state != ERRORSTATE){ // check if need to change state or continue running
       allLEDoff();
@@ -221,7 +238,11 @@ void loop() {
       allLEDoff();
       break;
     }
-    lcdDisplayTempHumid(temp, humid); // once per minute
+    currentCount = checkCount(); // check count
+    if(currentCount >= 60000){
+      lcdDisplayTempHumid(temp, humid); // once per minute
+      startCount(); // restart count
+    }
     reportVentChange(updateVentPosition());
     // blue LED on, all other LEDs off
     // fan motor on
@@ -246,11 +267,25 @@ void reportStateChange(const char* stateIn){ // check if state switch is needed 
   printTimeReport();
 }
 
-void printTimeReport(void){
-  Serial.print(" at ");
-  Serial.print(currentTime);
-  Serial.print(" on ");
-  Serial.println(currentDate);
+void printTimeReport(void){ // e.g. " at 2424 on 12/12/1212. \n"
+  DateTime time = rtc.now();
+  String timeNow = time.timestamp(DateTime::TIMESTAMP_TIME);
+  String dateNow = time.timestamp(DateTime::TIMESTAMP_DATE);
+  printString(" at ");
+  printString(timeNow.c_str());
+  printString(" on ");
+  printString(dateNow.c_str());
+  printString(". \n");
+}
+
+int startCount(){ //take in a starting time in miliseconds and begin counting up
+  initialMillis = millis(); // returns # of milliseconds the sketch has been running
+  return initialMillis;
+}
+
+int checkCount(void){
+  currentMillis = (millis() - initialMillis);
+  return currentMillis;
 }
 
 void printString(const char* stringIn){
